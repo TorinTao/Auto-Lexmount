@@ -34,6 +34,9 @@ def render_report(root, files):
         design=read_json(root/'design.json');validate_plan(design,output)
         if design.get('input_sha256')!=fingerprint(spec,output):raise WorkflowError('Design inputs changed')
     else:design=fallback_design(spec,output)
+    if (root/'reader.json').exists():
+        from .reader_presentation import render_reader_report
+        return render_reader_report(root,files,design,output,tests,quality)
     classic=design['theme']=='classic'
     points={p['id']:p for item in output['items'] for p in item.get('points',[])}
     # Safe anchors are independent of arbitrary source/model IDs.

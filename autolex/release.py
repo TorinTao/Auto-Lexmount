@@ -58,7 +58,7 @@ def prepare_release(root, profile):
         raise WorkflowError('Release requires the current evidence checks; create and verify a new revision')
     # Only this generated work's files are published; no repository or other run is traversed.
     files = ['main.py','input.json','output.json','tests.json','quality.json','review.json']
-    files += [name for name in ('design.json','citations.json','visual-review.json','visual-history.json','visual-theme.json') if (root/name).exists()]
+    files += [name for name in ('design.json','reader.json','reader-review.json','citations.json','visual-review.json','visual-history.json','visual-theme.json') if (root/name).exists()]
     sections = []
     for name in files:
         content=(root/name).read_text()
@@ -67,6 +67,7 @@ def prepare_release(root, profile):
     source_hash=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
     visual_note = '已通过 DeepSeek 真实截图评审与桌面/手机布局检查，问题按有限轮次自动调整并复验；这是模型辅助视觉验收。' if state.get('visual_enabled') else '视觉质量未纳入自动验收。'
     design_note = 'DeepSeek 为作品选择视觉风格、撰写导读并安排阅读顺序，原有结论与引用保留。' if (root/'design.json').exists() else '网页采用固定报告模板。'
+    if (root/'reader.json').exists():design_note += '另生成面向非技术读者的大白话和生活比方，并检查来源支撑及可理解性；技术细节可展开查看。'
     fields = {
         'workTitle':title,
         'taskProblem':specification.get('brief') or spec['description'],
@@ -76,6 +77,8 @@ def prepare_release(root, profile):
         'evidenceLink':'', 'evidenceAccessNote':''}
     dest=root/'release';dest.mkdir(exist_ok=True)
     about='<section><h2>这件作品如何完成</h2><p>'+html.escape(fields['cloudRole'])+'</p><p>'+html.escape(fields['taskResult'])+'</p><p><a href="materials.html">阅读本作品源码与运行证据 →</a></p><small>作品标识：'+html.escape(root.name)+' · 来源清单 SHA-256：'+source_hash+'</small></section>'
+    if (root/'reader.json').exists():
+        about='<details class="production-notes"><summary>这份指南是怎么做出来的？</summary>'+about+'</details>'
     index=(root/'index.html').read_text().replace('</main>',about+'</main>')
     from .presentation import report_style
     report_theme=html.escape(read_json(root/'design.json')['theme'],quote=True) if (root/'design.json').exists() else 'classic'

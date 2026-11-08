@@ -79,7 +79,9 @@ text:document.body.innerText.length})''')
                 checks.append(metrics)
                 for section in ['top','sources','implementation']:
                     if section=='top':page.evaluate('scrollTo(0,0)')
-                    elif section=='sources':page.locator('#sources').scroll_into_view_if_needed()
+                    elif section=='sources':
+                        for detail in page.locator('#sources > details').all():detail.evaluate('(e)=>e.open=true')
+                        page.locator('#sources').scroll_into_view_if_needed()
                     else:
                         page.locator('#implementation').evaluate('(e)=>e.open=true')
                         page.locator('#implementation').scroll_into_view_if_needed()

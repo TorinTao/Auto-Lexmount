@@ -21,7 +21,7 @@ def prepare(parent, child):
         p=parent/name
         if p.parent!=parent or p.is_symlink() or hashlib.sha256(p.read_bytes()).hexdigest()!=digest:raise WorkflowError('Parent artifact changed: '+name)
     child.mkdir()
-    skip={'design.json','design-error.json','index.html','submission.md','submission.json','model-events.json','visual-review.json','visual-history.json','visual-theme.json','visual-evidence.zip'}
+    skip={'reader-draft.json','reader-review-errors.json','reader.json','reader-review.json','reader-history.json','design.json','design-error.json','index.html','submission.md','submission.json','model-events.json','visual-review.json','visual-history.json','visual-theme.json','visual-evidence.zip'}
     hashes={}
     for name in manifest:
         if name not in skip:

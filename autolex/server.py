@@ -17,7 +17,7 @@ from .workflow import STAGES, Workflow
 
 WEB = Path(__file__).parent / "web"
 ARTIFACTS = {"rules.json", "ideas.json", "spec.json", "main.py", "tests.json", "output.json",
-             "submission.md", "submission.json", "manifest.json", "submission.zip", "submission-state.json", "release-state.json", "review.json", "review-errors.json", "visual-review.json", "visual-history.json", "visual-theme.json", "visual-evidence.zip", "citations.json", "citation-errors.json", "quality.json", "index.html", "test-history.json", "model-events.json", "design.json", "design-error.json"}
+             "submission.md", "submission.json", "manifest.json", "submission.zip", "submission-state.json", "release-state.json", "review.json", "review-errors.json", "visual-review.json", "visual-history.json", "visual-theme.json", "visual-evidence.zip", "citations.json", "citation-errors.json", "quality.json", "index.html", "test-history.json", "model-events.json", "design.json", "design-error.json", "reader.json", "reader-review.json", "reader-history.json", "reader-review-errors.json"}
 
 
 def configuration():

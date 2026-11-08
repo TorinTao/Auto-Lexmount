@@ -25,7 +25,7 @@ def main():
             else:
                 with tempfile.TemporaryDirectory() as temp:
                     temp=Path(temp)
-                    for name in ('spec.json','output.json','tests.json','quality.json','main.py','design.json'):
+                    for name in ('spec.json','output.json','tests.json','quality.json','main.py','design.json','reader.json','reader-review.json'):
                         if (root/name).exists():shutil.copyfile(root/name,temp/name)
                     design=read_json(temp/'design.json');design['theme']=theme;write_json(temp/'design.json',design)
                     document=render_report(temp,['main.py','design.json'])
@@ -34,6 +34,14 @@ def main():
                 page.set_content(document)
                 page.add_style_tag(content='html{scroll-behavior:auto}')
                 assert not page.evaluate('document.documentElement.scrollWidth>innerWidth'),(theme,width)
+                if (root/'reader.json').exists():
+                    initial=page.locator('body').inner_text()
+                    hero=page.locator('.hero').inner_text()
+                    for word in ('memo','deepcopy','main.py','point_refs'):
+                        assert word not in hero.lower(),('technical word in hero',word)
+                    for item in output['items']:
+                        for point in item.get('points',[]):assert point['quote'] not in initial
+                    assert page.locator('.everyday-example').count()==sum(len(i.get('points',[])) for i in output['items'])
                 links=page.locator('a[href^="#"]')
                 for i in range(links.count()):
                     target=links.nth(i).get_attribute('href')

@@ -24,7 +24,7 @@ def main():
     archive=(root/'release/site.zip').read_bytes();draft=read_json(root/'release/draft.json')
     if draft['archive_sha256']!=hashlib.sha256(archive).hexdigest():raise WorkflowError('Archive changed')
     if draft['title']!=target['title']:raise WorkflowError('Work identity changed')
-    headline=read_json(root/'design.json')['headline']
+    headline=read_json(root/('reader.json' if (root/'reader.json').exists() else 'design.json'))['headline']
     with Path('runs/.release.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         with ReleaseBrowser(read_json('.release-profile.json')) as b:
@@ -60,6 +60,7 @@ def main():
                     assert not frame.locator('html').evaluate('e=>e.scrollWidth>innerWidth')
                     page.screenshot(path=str(proof/('hosted-'+label+'.png')))
                 frame.locator('.atlas a').first.click();frame.locator('.points summary').first.click();expect(frame.locator('.points blockquote').first).to_be_visible()
+                if frame.locator('.production-notes').count():frame.locator('.production-notes > summary').click()
                 frame.locator('a[href="materials.html"]').click()
                 detail=frame.locator('details').filter(has=frame.get_by_text('main.py',exact=True));detail.locator('summary').click()
                 if detail.locator('pre').text_content()!=(root/'main.py').read_text():raise WorkflowError('Guest source changed')

@@ -439,7 +439,9 @@ Lexmount 提取公开网页 → 模型选题和生成 Python → 隔离执行 �
         if not self.demo:
             from .design import generate_design
             generate_design(self.root, self.model)
-            files += [name for name in ('design.json', 'design-error.json') if (self.root / name).exists()]
+            from .reader import generate_reader
+            generate_reader(self.root, self.model)
+            files += [name for name in ('design.json', 'design-error.json', 'reader.json', 'reader-review.json', 'reader-history.json', 'reader-review-errors.json', 'reader-draft.json') if (self.root / name).exists()]
         document = render_report(self.root, files)
         if getattr(self, "visual_enabled", False):
             from .visual import visual_gate
