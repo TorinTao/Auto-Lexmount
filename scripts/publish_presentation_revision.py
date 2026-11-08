@@ -40,7 +40,16 @@ def main():
             record={'status':'updating','prior_version':version,'url':target['url'],'archive_sha256':draft['archive_sha256'],'at':now(),'scope':'Existing test work presentation only; no contest form submission'}
             write_json(journal,record)
             response=b.context.request.post(YOURS_URL+'/api/sites/'+slug+'/versions?expected_version='+version,headers={'Origin':'https://yours.lexmount.cn'},multipart={'mode':'zip','file':{'name':root.name+'.zip','mimeType':'application/zip','buffer':archive}},timeout=60000)
-            if response.status not in (200,201):raise WorkflowError('Yours update HTTP '+str(response.status))
+            if response.status not in (200,201):
+                record.update(status='rate_limited' if response.status==429 else 'update_rejected',http_status=response.status,
+                              retry_after=response.headers.get('retry-after'))
+                try:
+                    error=response.json()
+                    # Response text is retained locally for diagnosing quotas, never as an instruction.
+                    record['server_error']=error.get('message') or error.get('error') or error.get('code') if isinstance(error,dict) else None
+                except Exception:pass
+                write_json(journal,record)
+                raise WorkflowError('Yours update HTTP '+str(response.status))
             current=b.context.request.get(YOURS_URL+'/api/sites/'+slug).json()
             if current['version']['id']==version:raise WorkflowError('New version not observed')
             record.update(status='published',version_id=current['version']['id']);write_json(journal,record)
