@@ -1,0 +1,30 @@
+[Unit]
+Description=Auto Lexmount agent dashboard
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=autolex
+Group=autolex
+SupplementaryGroups=docker
+WorkingDirectory=/opt/auto-lexmount/current
+ExecStart=/opt/auto-lexmount/current/.venv/bin/python -m autolex --env-file /etc/auto-lexmount/env serve --port 8766 --runs /var/lib/auto-lexmount/runs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/auto-lexmount
+MemoryHigh=384M
+MemoryMax=768M
+MemorySwapMax=512M
+CPUQuota=100%
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
