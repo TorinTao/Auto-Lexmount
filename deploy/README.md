@@ -31,7 +31,7 @@ ssh -N -L 8766:127.0.0.1:8766 ubuntu@39.106.14.223
 
 Then open <http://127.0.0.1:8766>. Keep the tunnel running. If that local port is occupied, stop the conflicting local service or choose the same different port on both the server CLI and tunnel; the dashboard checks its exact Host and Origin.
 
-For public access, use the dedicated authenticated HTTPS gateway below. Do not expose this private dashboard by stripping its Host/Origin checks or forwarding it anonymously.
+For public access, use the dedicated HTTPS gateway below. Public access is intentionally anonymous at the owner’s request; keep the application’s Host/Origin and mutation-token checks enabled.
 
 Update by creating a new release directory and virtual environment, verifying it, switching `current`, and restarting `autolex`. Keep the old release for rollback. Persistent runs and credentials live outside releases. Do not restart the service during an active workflow; finish the run first or inspect its saved state before resuming.
 
@@ -57,11 +57,11 @@ When only TCP 8766 is allowed in the cloud security group, use `https://39.106.1
 
 Without public ACME validation ports or a domain with DNS validation, this setup uses a self-signed certificate at `/etc/auto-lexmount/tls/public-ip.crt` and a private key at `public-ip.key` (root-only, mode 0600). Include `subjectAltName=IP:39.106.14.223` when creating the certificate. Browsers display an untrusted-certificate warning; this is not a publicly trusted certificate. Record its SHA-256 fingerprint and expiry with the deployment evidence. Keep the certificate renewal timer disabled for this setup; replacing the certificate with a trusted one requires the validation setup below or a domain with DNS validation.
 
-The gateway encrypts traffic and requires the existing `autolex` username/password on every application route. Plain HTTP requests to port 8766 redirect to HTTPS. Anonymous and wrong-password requests must return 401. Verify login, a demo run, artifact downloads, and cross-origin rejection through the actual public IP. For a private SSH fallback with this layout, use `ssh -N -L 8767:127.0.0.1:8767 ubuntu@39.106.14.223` and open `http://127.0.0.1:8767`.
+The gateway encrypts traffic and opens the dashboard directly without an account or password. Plain HTTP requests to port 8766 redirect to HTTPS. Anonymous page/API requests return 200 without a login challenge; workflow actions still require the normal same-origin mutation token obtained by the frontend. Verify anonymous access, a demo run, artifact downloads, and cross-origin rejection through the actual public IP. For a private SSH fallback with this layout, use `ssh -N -L 8767:127.0.0.1:8767 ubuntu@39.106.14.223` and open `http://127.0.0.1:8767`.
 
 ### Optional upgrade: standard ports and trusted certificate
 
-The standard-port public address is `https://39.106.14.223`. For this layout remove the `public-port.conf` systemd override, return the backend to loopback port 8766, and set `AUTOLEX_PUBLIC_ORIGIN=https://39.106.14.223` in `/etc/auto-lexmount/env`. The setting explicitly permits this Host and HTTPS Origin while retaining the mutation token check. It is an origin allowlist, **not authentication**: nginx protects all dashboard routes, API responses, previews and downloads with HTTP Basic authentication over TLS. Stop the 8766 gateway before switching the backend port, then restart it with the standard-port configuration.
+The standard-port public address is `https://39.106.14.223`. For this layout remove the `public-port.conf` systemd override, return the backend to loopback port 8766, and set `AUTOLEX_PUBLIC_ORIGIN=https://39.106.14.223` in `/etc/auto-lexmount/env`. The setting explicitly permits this Host and HTTPS Origin while retaining the mutation token check. It is an origin allowlist, **not authentication**; the public dashboard intentionally has no login gate. Stop the 8766 gateway before switching the backend port, then restart it with the standard-port configuration.
 
 Allow inbound TCP 80 and 443 in the Alibaba Cloud security group (source `0.0.0.0/0`). Port 80 serves ACME certificate validation and redirects other requests to HTTPS; do not open the backend port. If local HTTP works but an external connection times out, inspect the security group and cloud firewall before changing the application.
 
@@ -76,8 +76,8 @@ sudo /opt/autolex-certbot/bin/certbot certonly --non-interactive \
   --ip-address 39.106.14.223 --cert-name autolex-ip
 ```
 
-Store a strong generated password hash in `/etc/nginx/autolex.htpasswd`, owned by `root:www-data` with mode 0640; keep the actual password out of Git. Then install `nginx-public.conf`, validate with `sudo nginx -t -c /etc/auto-lexmount/nginx.conf`, and reload `autolex-gateway`.
+Install `nginx-public.conf`, validate with `sudo nginx -t -c /etc/auto-lexmount/nginx.conf`, and reload `autolex-gateway`.
 
 IP certificates are short lived, so install and enable `autolex-cert-renew.timer` and its matching service. They check twice daily and reload only this gateway after renewal. Validate renewal with `sudo /opt/autolex-certbot/bin/certbot renew --cert-name autolex-ip --dry-run`.
 
-Verify from outside the server: HTTP redirects to HTTPS, anonymous HTTPS returns 401, correct credentials open the dashboard, wrong credentials fail, cross-origin requests fail, and an authenticated demo reaches a downloadable package. Never call deployment complete based only on a local request. To remove public access, stop/disable `autolex-gateway` and `autolex-cert-renew.timer`; the backend and SSH tunnel continue working.
+Verify from outside the server: HTTP redirects to HTTPS, anonymous HTTPS opens the dashboard with no `WWW-Authenticate` challenge, cross-origin requests fail, and a demo reaches a downloadable package without credentials. Never call deployment complete based only on a local request. To remove public access, stop/disable `autolex-gateway` and `autolex-cert-renew.timer`; the backend and SSH tunnel continue working.
