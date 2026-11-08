@@ -1,4 +1,4 @@
-"""Loopback-only dashboard API. Credentials stay in the server environment."""
+"""Loopback dashboard API, optionally behind an authenticated HTTPS proxy."""
 import json
 import fcntl
 import os
@@ -32,6 +32,13 @@ class Dashboard:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.workflow = workflow
+        self.public_origin = os.getenv("AUTOLEX_PUBLIC_ORIGIN", "")
+        if self.public_origin:
+            parsed = urlsplit(self.public_origin)
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None
+                    or parsed.password is not None or parsed.path or parsed.query or parsed.fragment
+                    or self.public_origin != "https://" + parsed.netloc):
+                raise WorkflowError("AUTOLEX_PUBLIC_ORIGIN 必须是完整的 HTTPS 来源地址，不含路径")
         self.token = secrets.token_urlsafe(32)
         self.lock = threading.Lock()
         self.active = set()
@@ -236,10 +243,14 @@ def handler_for(app):
         def local_request(self, mutation=False):
             host = self.headers.get("Host", "")
             port = self.server.server_port
-            if host not in {f"localhost:{port}", f"127.0.0.1:{port}"}:
+            origins = {f"localhost:{port}": f"http://localhost:{port}",
+                       f"127.0.0.1:{port}": f"http://127.0.0.1:{port}"}
+            if app.public_origin:
+                origins[urlsplit(app.public_origin).netloc] = app.public_origin
+            if host not in origins:
                 return False
             origin = self.headers.get("Origin")
-            if origin and origin != "http://" + host:
+            if origin and origin != origins[host]:
                 return False
             return not mutation or secrets.compare_digest(self.headers.get("X-Autolex-Token", ""), app.token)
 
@@ -258,7 +269,7 @@ def handler_for(app):
 
         def do_GET(self):
             if not self.local_request():
-                return self.send(403, {"error": "仅允许本机同源访问"})
+                return self.send(403, {"error": "访问地址或来源未获允许"})
             path = urlsplit(self.path).path
             try:
                 if path == "/api/health":

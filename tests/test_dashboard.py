@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import tempfile
 import threading
 import time
@@ -148,6 +149,30 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(self.request("GET", "/api/health", **options)["status"], 403)
         self.assertEqual(self.request("POST", "/api/runs", {"url": "https://example.com"})["status"], 403)
         self.assertEqual(self.request("POST", "/api/runs", {}, token="wrong")["status"], 403)
+
+    def test_public_proxy_origin_and_csrf(self):
+        with patch.dict(os.environ, {"AUTOLEX_PUBLIC_ORIGIN": "https://39.106.14.223"}):
+            self.app = Dashboard(self.root)
+        host = "39.106.14.223"
+        self.assertEqual(self.request("GET", "/api/health", host=host)["status"], 200)
+        for origin in ("http://39.106.14.223", "https://evil.example", "null"):
+            self.assertEqual(self.request("GET", "/api/health", host=host, origin=origin)["status"], 403)
+        self.assertEqual(self.request("GET", "/api/health", host="other.example")["status"], 403)
+        options = {"host": host, "origin": "https://39.106.14.223"}
+        self.assertEqual(self.request("POST", "/api/runs", {}, **options)["status"], 403)
+        self.assertEqual(self.request("POST", "/api/runs", {}, token="wrong", **options)["status"], 403)
+        result = self.request("POST", "/api/runs", {"mode": "demo", "url": "https://example.com"},
+                              token=self.app.token, **options)
+        self.assertEqual(result["status"], 202)
+        self.assertEqual(self.wait(json.loads(result["body"])["id"])["state"]["status"], "ready")
+        self.assertEqual(self.request("GET", "/api/health")["status"], 200)
+
+    def test_public_origin_must_be_explicit_https_origin(self):
+        for origin in ("http://example.com", "https://example.com/", "https://user:pass@example.com",
+                       "https://example.com?x=y", "https://example.com#fragment", "https://"):
+            with self.subTest(origin=origin), patch.dict(os.environ, {"AUTOLEX_PUBLIC_ORIGIN": origin}):
+                with self.assertRaises(WorkflowError):
+                    Dashboard(self.root)
 
     def test_revision_creates_new_run_and_retains_parent(self):
         parent=self.app.launch({'url':'https://example.com','mode':'demo'})['id']

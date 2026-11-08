@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Auto Lexmount HTTPS certificate
+After=network-online.target autolex-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/autolex-certbot/bin/certbot renew --cert-name autolex-ip --quiet --deploy-hook "/usr/bin/systemctl reload autolex-gateway"
