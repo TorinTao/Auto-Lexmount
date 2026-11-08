@@ -50,6 +50,11 @@ with sync_playwright() as p:
     page.locator('.faq details').last.locator('summary').click();assert page.locator('.faq details').last.get_attribute('open') is not None
     assert not posts,'Flow demo unexpectedly wrote to a server'
     repo='https://github.com/TorinTao/Auto-Lexmount'
+    for label,url in [('GitHub 源码',repo),('在线演示','https://39.106.14.223:8766')]:
+        action=page.locator('.hero .actions').get_by_role('link',name=label)
+        expect(action).to_have_attribute('href',url)
+        expect(action).to_have_attribute('target','_blank')
+        expect(action).to_have_attribute('rel','noopener noreferrer')
     expect(page.locator('.site-header .github-link')).to_have_attribute('href',repo)
     expect(page.locator('.site-header .github-link')).to_have_attribute('target','_blank')
     assert page.get_by_text('想看细节',exact=True).count()==0
@@ -58,6 +63,6 @@ with sync_playwright() as p:
     assert not (Path(args.site)/'source.zip').exists()
     response=page.goto(args.url+'/materials.html');assert response.status==404
     assert not errors,errors
-    write_json(out/'browser-checks.json',{'passed':True,'views':checks,'flow_tabs_and_keyboard':True,'autoplay_and_pause':True,'five_screenshot_dialogs':True,'passcode_copy':True,'faq':True,'github_link':True,'details_page_removed':True,'demo_sends_no_posts':True,'page_errors':errors})
+    write_json(out/'browser-checks.json',{'passed':True,'views':checks,'flow_tabs_and_keyboard':True,'autoplay_and_pause':True,'five_screenshot_dialogs':True,'passcode_copy':True,'faq':True,'github_link':True,'hero_github_and_demo_links':True,'details_page_removed':True,'demo_sends_no_posts':True,'page_errors':errors})
     print(json.dumps({'passed':True,'views':len(checks),'page_errors':errors}))
     context.close();browser.close()

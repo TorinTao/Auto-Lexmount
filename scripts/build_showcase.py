@@ -66,5 +66,5 @@ with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
     for p in sorted(site.rglob('*')):
         if p.is_file():z.write(p,p.relative_to(site))
 with zipfile.ZipFile(archive) as z:assert z.testzip() is None
-write_json(proof/'build.json',{'target_url':identity['url'],'screenshots':screenshots,'archive':str(archive.relative_to(root)),'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'bytes':archive.stat().st_size,'file_hashes':{str(p.relative_to(site)):hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()},'github_url':'https://github.com/TorinTao/Auto-Lexmount','details_page_removed':True,'private_scan':'passed','title':identity['title'],'copy_source':identity['copy']})
+write_json(proof/'build.json',{'target_url':identity['url'],'screenshots':screenshots,'archive':str(archive.relative_to(root)),'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'bytes':archive.stat().st_size,'file_hashes':{str(p.relative_to(site)):hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()},'github_url':'https://github.com/TorinTao/Auto-Lexmount','demo_url':'https://39.106.14.223:8766','details_page_removed':True,'private_scan':'passed','title':identity['title'],'copy_source':identity['copy']})
 print(json.dumps({'archive':str(archive),'bytes':archive.stat().st_size,'details_page_removed':True}))

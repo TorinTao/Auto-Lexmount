@@ -78,6 +78,12 @@ with (root/'runs/.release.lock').open('a') as lock:
             frame=page.frame_locator('iframe.fs-frame');expect(frame.locator('h1')).to_have_text('你动动手指，它跑完流程。')
             link=frame.locator('.site-header .github-link');expect(link).to_have_attribute('href',repo)
             expect(link).to_have_attribute('target','_blank');expect(frame.locator('.nav-proof')).to_have_count(0)
+            for label,url in [('GitHub 源码',repo),('在线演示',build['demo_url'])]:
+                action=frame.locator('.hero .actions').get_by_role('link',name=label)
+                expect(action).to_have_attribute('href',url)
+                expect(action).to_have_attribute('target','_blank')
+                expect(action).to_have_attribute('rel','noopener noreferrer')
+
             expect(frame.get_by_text('想看细节',exact=True)).to_have_count(0)
             assert frame.locator('a[href*="materials.html"]').count()==0
             for label,w,h in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
@@ -99,7 +105,7 @@ with (root/'runs/.release.lock').open('a') as lock:
             expected={name:sha for name,sha in build['file_hashes'].items() if name!='index.html'}
             assert hashes==expected,'Live assets differ from build'
             record.update(status='verified',verified_at=now(),direct_home=True,details_page_removed=True,
-                          github_link_verified=True,responsive_views=3,all_files_verified=True,verified_files=len(build['file_hashes']))
+                          github_link_verified=True,hero_github_and_demo_links_verified=True,responsive_views=3,all_files_verified=True,verified_files=len(build['file_hashes']))
             write_json(journal,record)
         finally:guest.close()
         identity.update(showcase_version=record['version_id'],showcase_proof=str(journal.relative_to(root)),
