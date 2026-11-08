@@ -43,5 +43,3 @@ if(dialog){
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
   dialog.addEventListener('close',()=>lastPreview?.focus());
 }
-const search=document.getElementById('source-search');
-if(search){const files=[...document.querySelectorAll('.source-file')];search.addEventListener('input',()=>{const value=search.value.trim().toLowerCase();let count=0;files.forEach(file=>{file.hidden=!file.dataset.filename.toLowerCase().includes(value);if(!file.hidden)count++;});document.getElementById('source-count').textContent=`找到 ${count} 个文件`;});}

@@ -1,120 +1,108 @@
-"""Update only the existing Yours showcase; preserve sharing and contest form copy."""
+"""Publish the self showcase as a direct-entry website and verify the guest UI."""
 import argparse
-import uuid
+import base64
 import fcntl
 import hashlib
-import io
 import json
 import sys
+import time
+import uuid
 import zipfile
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from playwright.sync_api import expect
 from autolex.common import read_json,write_json,WorkflowError,now
-from autolex.release_browser import ReleaseBrowser,YOURS_URL
-from scripts.resubmit_existing import matching_archive
-from scripts.update_self_entry import Sources
+from autolex.release_browser import ReleaseBrowser
 
 parser=argparse.ArgumentParser()
-parser.add_argument('--proof',default='runs/autolex-public-refresh')
-args=parser.parse_args()
-root=Path.cwd();proof=root/args.proof;journal=proof/'deployment.json'
-if journal.exists():raise WorkflowError('Deployment already attempted; inspect the saved outcome before retry')
+parser.add_argument('--proof',default='runs/showcase-github-only')
+args=parser.parse_args();root=Path.cwd();proof=root/args.proof;journal=proof/'deployment.json'
+if journal.exists():raise WorkflowError('Publication already attempted; inspect the saved outcome before retrying')
+build=read_json(proof/'build.json');identity=read_json(root/'runs/self-entry-current.json')
 assert read_json(proof/'browser-checks.json')['passed']
-build=read_json(proof/'build.json');archive=root/build['archive'];data=archive.read_bytes()
-if hashlib.sha256(data).hexdigest()!=build['sha256']:raise WorkflowError('Build archive changed')
-identity=read_json(root/'runs/self-entry-current.json')
-if identity['url']!='https://yours.lexmount.cn/artifact-site/s/ct83Wy9aja_U' or build['target_url']!=identity['url']:raise WorkflowError('Wrong Auto Lexmount target')
+assert build['details_page_removed']
+assert identity['url']==build['target_url']=='https://yours.lexmount.cn/artifact-site/s/ct83Wy9aja_U'
+archive=root/build['archive'];assert hashlib.sha256(archive.read_bytes()).hexdigest()==build['sha256']
+repo=build['github_url'];key='autolex-showcase-'+str(uuid.uuid4())
 with (root/'runs/.release.lock').open('a') as lock:
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     with ReleaseBrowser(read_json(root/'.release-profile.json')) as b:
-        b.page.goto(identity['url'],wait_until='domcontentloaded');b.page.locator('iframe.fs-frame').wait_for(timeout=30000)
-        write_json(proof/'prepublish-page.json',{'url':b.page.url,'buttons':b.page.get_by_role('button').all_text_contents()})
-        for item in (build.get('screenshots') or {}).get('works',{}).values():
-            slug=item['url'].rsplit('/',1)[-1]
-            live=b.context.request.get(YOURS_URL+'/api/sites/'+slug).json()
-            if live['version']['id']!=item['version_id']:raise WorkflowError('A featured work changed after its screenshot; refresh it first')
-        old=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U').json();version=old['version']['id']
-        before=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U/export',timeout=30000)
-        if before.status!=200:raise WorkflowError('Cannot back up previous version')
-        (proof/'before.zip').write_bytes(before.body())
-        write_json(proof/'before.json',{'version_id':version,'url':identity['url']})
-        record={'status':'updating','url':identity['url'],'prior_version':version,'archive_sha256':build['sha256'],'at':now(),'method':'native-tree-upload','scope':'Auto Lexmount self showcase; existing form fields preserved'}
+        p=b.page;p.goto(identity['url'],wait_until='domcontentloaded');p.locator('iframe.fs-frame').wait_for()
+        def request(path,method='GET',body=None,binary=None,idempotency=None):
+            for attempt in range(3):
+                response=p.evaluate('''async(a)=>{const headers={};let body;
+                    if(a.binary!==null){headers['Content-Type']='application/octet-stream';body=Uint8Array.from(atob(a.binary),c=>c.charCodeAt(0))}
+                    else if(a.body!==null){headers['Content-Type']='application/json';body=JSON.stringify(a.body)}
+                    if(a.key)headers['idempotency-key']=a.key;
+                    const r=await fetch('/artifact-site/api'+a.path,{method:a.method,headers,body});
+                    return {status:r.status,retryAfter:r.headers.get('retry-after'),body:await r.json().catch(()=>({}))}}''',
+                    {'path':path,'method':method,'body':body,'binary':base64.b64encode(binary).decode() if binary is not None else None,'key':idempotency})
+                if response['status']!=429:return response
+                if attempt<2:
+                    delay=max(45,int(response['retryAfter'])) if (response['retryAfter'] or '').isdigit() else 45
+                    if delay>60:raise WorkflowError('Rate limit requires a longer pause; inspect journal before resuming')
+                    print('Rate limited; waiting before retrying the same operation.',flush=True);time.sleep(delay)
+            raise WorkflowError('Rate limit persists; inspect journal before resuming')
+        meta=request('/sites/ct83Wy9aja_U');assert meta['status']==200
+        prior=meta['body']['version']['id']
+        assert prior==identity['showcase_version'],'Remote version changed since last verified update'
+        write_json(proof/'before.json',{'version_id':prior,'archive':identity['showcase_archive']})
+        record={'status':'staging','url':identity['url'],'prior_version':prior,'archive':build['archive'],
+                'archive_sha256':build['sha256'],'idempotency_key':key,'at':now(),'method':'native-tree-upload'}
         write_json(journal,record)
-        try:
-            # Upload a website tree without package metadata. ZIP/package uploads
-            # generate a file-directory entry, adding an unnecessary index click.
-            key='autolex-showcase-'+str(uuid.uuid4())
-            record['idempotency_key']=key;write_json(journal,record)
-            headers={'Origin':'https://yours.lexmount.cn','idempotency-key':key+'-start'}
-            started=b.context.request.post(YOURS_URL+'/api/uploads',headers=headers,data={'slug':'ct83Wy9aja_U'})
-            if started.status!=201:raise WorkflowError('Could not stage website tree: '+str(started.status))
-            upload_id=started.json()['versionId'];record['upload_id']=upload_id;write_json(journal,record)
-            with zipfile.ZipFile(io.BytesIO(data)) as content:
-                for name in content.namelist():
-                    if name.endswith('/'):continue
-                    response=b.context.request.put(YOURS_URL+'/api/uploads/'+upload_id+'/files/'+name,
-                        headers={'Origin':'https://yours.lexmount.cn','content-type':'application/octet-stream'},data=content.read(name))
-                    if response.status not in (200,201,204):raise WorkflowError('Failed to stage '+name)
-            record['status']='committing';write_json(journal,record)
-            response=b.context.request.post(YOURS_URL+'/api/uploads/'+upload_id+'/commit?expected_version='+version,
-                headers={'Origin':'https://yours.lexmount.cn','idempotency-key':key},data={'official':False},timeout=60000)
-            if response.status!=201:raise WorkflowError('Website commit returned '+str(response.status))
-            current=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U').json()
-            if current['version']['id']!=response.json()['versionId']:raise WorkflowError('Published version changed')
-            if current['version']['entry']!='index.html':raise WorkflowError('Website must open its homepage directly')
-            record.update(status='published',version_id=current['version']['id']);write_json(journal,record)
-        except Exception:
-            if record['status'] in ('updating','committing'):record['status']='unknown';write_json(journal,record)
-            raise
-        exported=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U/export',timeout=30000)
-        if exported.status!=200:raise WorkflowError('Cannot verify hosted archive')
-        matching_archive(exported.body(),data)
-        with zipfile.ZipFile(io.BytesIO(exported.body())) as z:
-            parser=Sources();parser.feed(z.read('materials.html').decode())
-        checked=[]
-        for name in build['files']:
-            path=root/name
-            if parser.files.get(name)!=path.read_text():raise WorkflowError('Hosted source or evidence differs: '+name)
-            checked.append(name)
-        write_json(proof/'hosted-source-verification.json',{'passed':True,'files':checked,'version_id':record['version_id']})
+        started=request('/uploads','POST',{'slug':'ct83Wy9aja_U'},idempotency=key+'-start')
+        if started['status']!=201:raise WorkflowError('Staging returned HTTP '+str(started['status']))
+        upload=started['body']['versionId'];record['upload_id']=upload;write_json(journal,record)
+        with zipfile.ZipFile(archive) as z:
+            assert set(z.namelist())==set(build['file_hashes'])
+            assert 'materials.html' not in z.namelist() and 'source.zip' not in z.namelist()
+            for name in z.namelist():
+                r=request('/uploads/'+upload+'/files/'+name,'PUT',binary=z.read(name))
+                if r['status'] not in (200,201,204):raise WorkflowError('File staging failed: '+name)
+        record['status']='committing';write_json(journal,record)
+        r=request('/uploads/'+upload+'/commit?expected_version='+prior,'POST',{'official':False},idempotency=key)
+        if r['status']!=201:raise WorkflowError('Commit returned HTTP '+str(r['status']))
+        record.update(status='published',version_id=r['body']['versionId']);write_json(journal,record)
+        print('Published; verifying the live page.',flush=True)
+        meta=request('/sites/ct83Wy9aja_U');assert meta['status']==200;meta=meta['body']
+        assert meta['version']['id']==record['version_id'] and meta['version']['entry']=='index.html'
+        paths={item if isinstance(item,str) else item.get('path',item.get('name')) for item in meta['files']}
+        assert paths==set(build['file_hashes']), 'Hosted file inventory differs'
+        # Editor metadata returns the original entry; preview rendering rewrites asset URLs.
+        assert hashlib.sha256(meta['content'].encode()).hexdigest()==build['file_hashes']['index.html']
         guest=b.browser.new_context(viewport={'width':1440,'height':1050})
         try:
-            page=guest.new_page();page.set_default_timeout(30000);page.goto(identity['url'],wait_until='domcontentloaded')
+            page=guest.new_page();page.set_default_timeout(30000)
+            page.goto(identity['url'],wait_until='domcontentloaded')
             page.locator('#main-passcode').fill('NH8EPP');page.get_by_role('button',name='Open work',exact=True).click()
-            frame=page.frame_locator('iframe.fs-frame')
-            # A fresh guest must see the homepage without opening a directory item.
-            expect(frame.locator('h1')).to_have_text('你动动手指，它跑完流程。')
-            expect(frame.locator('.hero-body')).to_contain_text('Auto Lexmount')
-            expect(frame.locator('.experiment')).to_contain_text('后续测试提交会按约定加上标记')
-            # Native model-explanation demo must work inside the hosted sandbox too.
-            frame.locator('#step-4').click();expect(frame.locator('#step-title')).to_have_text('做出来，也得让人看得懂。')
-            frame.locator('#step-5').click();expect(frame.locator('#step-title')).to_have_text('材料准备好，获得授权后交作业。')
-            frame.locator('#step-0').click()
-            for button in frame.locator('[data-preview]').all():
-                button.click();expect(frame.locator('#preview-dialog')).to_be_visible()
-                assert frame.locator('#preview-image').evaluate('(e)=>e.complete&&e.naturalWidth===1440&&e.naturalHeight===1050')
-                frame.locator('#close-preview').click()
-            frame.locator('#works-title').evaluate('(e)=>e.scrollIntoView({behavior:"instant"})')
-            page.screenshot(path=str(proof/'hosted-work-gallery.png'))
-            for label,width,height in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
-                page.set_viewport_size({'width':width,'height':height})
-                frame.locator('body').evaluate('()=>window.scrollTo({top:0,behavior:"instant"})')
-                assert not frame.locator('html').evaluate('(e)=>e.scrollWidth>innerWidth'),label
+            frame=page.frame_locator('iframe.fs-frame');expect(frame.locator('h1')).to_have_text('你动动手指，它跑完流程。')
+            link=frame.locator('.site-header .github-link');expect(link).to_have_attribute('href',repo)
+            expect(link).to_have_attribute('target','_blank');expect(frame.locator('.nav-proof')).to_have_count(0)
+            expect(frame.get_by_text('想看细节',exact=True)).to_have_count(0)
+            assert frame.locator('a[href*="materials.html"]').count()==0
+            for label,w,h in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
+                page.set_viewport_size({'width':w,'height':h});expect(link).to_be_visible()
+                assert not frame.locator('html').evaluate('(e)=>e.scrollWidth>innerWidth')
+                assert link.evaluate('(e)=>e.getBoundingClientRect().height')>=44
                 page.screenshot(path=str(proof/('hosted-'+label+'.png')))
             page.set_viewport_size({'width':1440,'height':1050})
-            frame.locator('.nav-proof').click()
-            expect(frame.locator('h1')).to_have_text('想看它有没有吹牛？记录都在这里。')
-            frame.locator('#source-search').fill('autolex/visual.py');expect(frame.locator('.source-file:not([hidden])')).to_have_count(1)
-            selected=frame.locator('.source-file:not([hidden])');selected.locator('summary').click()
-            if selected.locator('pre').text_content()!=(root/'autolex/visual.py').read_text():raise WorkflowError('Guest source mismatch')
-            page.screenshot(path=str(proof/'hosted-source.png'))
-            record.update(guest_verified=True,hosted_interactions_verified=True,archive_verified=True)
+            frame.locator('#step-4').click();expect(frame.locator('#step-title')).to_have_text('做出来，也得让人看得懂。')
+            for button in frame.locator('[data-preview]').all():
+                button.click();expect(frame.locator('#preview-dialog')).to_be_visible();frame.locator('#close-preview').click()
+            hashes=frame.locator('body').evaluate('''async()=>{
+                const urls=new Set([...document.querySelectorAll('script[src],link[href],img[src]')].map(e=>e.src||e.href).filter(Boolean));const out={};
+                for(const url of urls){const name=decodeURIComponent(new URL(url).pathname.split('/').pop());
+                  if(!/\\.(png|svg|css|js)$/.test(name))continue;
+                  const r=await fetch(url);if(!r.ok)throw Error('Asset unavailable');
+                  const hash=await crypto.subtle.digest('SHA-256',await r.arrayBuffer());out[name]=[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+                return out;}''')
+            expected={name:sha for name,sha in build['file_hashes'].items() if name!='index.html'}
+            assert hashes==expected,'Live assets differ from build'
+            record.update(status='verified',verified_at=now(),direct_home=True,details_page_removed=True,
+                          github_link_verified=True,responsive_views=3,all_files_verified=True,verified_files=len(build['file_hashes']))
             write_json(journal,record)
         finally:guest.close()
-        record.update(status='verified',verified_at=now(),direct_home=True,contest_form_written=False,source_files_verified=len(checked))
-        write_json(journal,record)
         identity.update(showcase_version=record['version_id'],showcase_proof=str(journal.relative_to(root)),
-            showcase_archive=build['archive'],showcase_verified_at=record['verified_at'],showcase_entry='index.html')
+                        showcase_archive=build['archive'],showcase_verified_at=record['verified_at'],showcase_entry='index.html')
         write_json(root/'runs/self-entry-current.json',identity)
-        print(json.dumps({'status':'verified','url':identity['url'],'version_id':record['version_id'],'guest_verified':True,'direct_home':True,'source_files_verified':len(checked)}),flush=True)
+        print(json.dumps({'status':'verified','url':identity['url'],'version':record['version_id']}),flush=True)

@@ -49,19 +49,15 @@ with sync_playwright() as p:
     assert page.evaluate('navigator.clipboard.readText()')==code
     page.locator('.faq details').last.locator('summary').click();assert page.locator('.faq details').last.get_attribute('open') is not None
     assert not posts,'Flow demo unexpectedly wrote to a server'
-    response=page.goto(args.url+'/materials.html',wait_until='networkidle');assert response.status==200
-    for label,width,height in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
-        page.set_viewport_size({'width':width,'height':height});page.screenshot(path=str(out/(label+'-evidence.png')))
-        overflow=page.evaluate('document.documentElement.scrollWidth>innerWidth');checks.append({'page':'evidence','viewport':label,'overflow':overflow});assert not overflow
-    page.locator('#source-search').fill('autolex/visual.py');expect(page.locator('.source-file:not([hidden])')).to_have_count(1)
-    file=page.locator('.source-file:not([hidden])');file.locator('summary').click()
-    assert file.locator('pre').text_content()==Path('autolex/visual.py').read_text()
-    page.locator('#source-search').fill('missing-file-example');expect(page.locator('#source-count')).to_have_text('找到 0 个文件')
-    page.locator('#source-search').fill('');assert page.locator('.source-file:not([hidden])').count()>60
-    with page.expect_download() as info:page.get_by_role('link',name='下载源码与记录 ↓').click()
-    download=info.value;assert download.suggested_filename=='source.zip';download.save_as(str(out/'downloaded-source.zip'))
-    assert (out/'downloaded-source.zip').read_bytes()==(Path(args.site)/'source.zip').read_bytes()
+    repo='https://github.com/TorinTao/Auto-Lexmount'
+    expect(page.locator('.site-header .github-link')).to_have_attribute('href',repo)
+    expect(page.locator('.site-header .github-link')).to_have_attribute('target','_blank')
+    assert page.get_by_text('想看细节',exact=True).count()==0
+    assert page.locator('a[href*="materials.html"]').count()==0
+    assert not (Path(args.site)/'materials.html').exists()
+    assert not (Path(args.site)/'source.zip').exists()
+    response=page.goto(args.url+'/materials.html');assert response.status==404
     assert not errors,errors
-    write_json(out/'browser-checks.json',{'passed':True,'views':checks,'flow_tabs_and_keyboard':True,'autoplay_and_pause':True,'five_screenshot_dialogs':True,'passcode_copy':True,'faq':True,'source_search':True,'source_text_matches':True,'source_download_matches':True,'demo_sends_no_posts':True,'page_errors':errors})
+    write_json(out/'browser-checks.json',{'passed':True,'views':checks,'flow_tabs_and_keyboard':True,'autoplay_and_pause':True,'five_screenshot_dialogs':True,'passcode_copy':True,'faq':True,'github_link':True,'details_page_removed':True,'demo_sends_no_posts':True,'page_errors':errors})
     print(json.dumps({'passed':True,'views':len(checks),'page_errors':errors}))
     context.close();browser.close()
