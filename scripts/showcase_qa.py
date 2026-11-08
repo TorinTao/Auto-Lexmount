@@ -1,19 +1,30 @@
 """Browser QA for the public showcase, using a local static preview."""
+import argparse
 import json
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from playwright.sync_api import sync_playwright,expect
 from autolex.common import write_json
-out=Path('runs/yours-redesign');out.mkdir(exist_ok=True)
+parser=argparse.ArgumentParser()
+parser.add_argument('--site',default='dist/submission-site-v7')
+parser.add_argument('--proof',default='runs/autolex-public-refresh')
+parser.add_argument('--url',default='http://127.0.0.1:8768')
+args=parser.parse_args()
+out=Path(args.proof);out.mkdir(parents=True,exist_ok=True)
 checks=[];errors=[];posts=[]
 with sync_playwright() as p:
     browser=p.chromium.launch();context=browser.new_context(viewport={'width':1440,'height':1050},permissions=['clipboard-read','clipboard-write'])
     page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:posts.append(r.url) if r.method not in ('GET','HEAD') else None)
-    response=page.goto('http://127.0.0.1:8768',wait_until='networkidle');assert response.status==200
+    response=page.goto(args.url,wait_until='networkidle');assert response.status==200
     expect(page.locator('h1')).to_have_text('你动动手指，它跑完流程。')
     expect(page.locator('.experiment')).to_contain_text('后续测试提交会按约定加上标记')
     assert page.locator('.work-card').count()==5
+    expect(page.locator('.hero-body')).to_contain_text('Auto Lexmount')
+    expect(page.locator('#works-title')).to_contain_text('Auto Lexmount')
+    assert '浅拷贝' not in page.locator('.hero').inner_text()
+    assert 'token' not in page.locator('.hero').inner_text()
+    assert 'Auto Lexmount' in page.title()
     for label,width,height in [('desktop',1440,1050),('tablet',820,1180),('mobile',390,844),('narrow',320,760)]:
         page.set_viewport_size({'width':width,'height':height});page.evaluate('scrollTo(0,0)');page.screenshot(path=str(out/(label+'-home.png')),full_page=True)
         metrics=page.evaluate('''()=>({overflow:document.documentElement.scrollWidth>innerWidth,
@@ -38,7 +49,7 @@ with sync_playwright() as p:
     assert page.evaluate('navigator.clipboard.readText()')==code
     page.locator('.faq details').last.locator('summary').click();assert page.locator('.faq details').last.get_attribute('open') is not None
     assert not posts,'Flow demo unexpectedly wrote to a server'
-    response=page.goto('http://127.0.0.1:8768/materials.html',wait_until='networkidle');assert response.status==200
+    response=page.goto(args.url+'/materials.html',wait_until='networkidle');assert response.status==200
     for label,width,height in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
         page.set_viewport_size({'width':width,'height':height});page.screenshot(path=str(out/(label+'-evidence.png')))
         overflow=page.evaluate('document.documentElement.scrollWidth>innerWidth');checks.append({'page':'evidence','viewport':label,'overflow':overflow});assert not overflow
@@ -49,7 +60,7 @@ with sync_playwright() as p:
     page.locator('#source-search').fill('');assert page.locator('.source-file:not([hidden])').count()>60
     with page.expect_download() as info:page.get_by_role('link',name='下载源码与记录 ↓').click()
     download=info.value;assert download.suggested_filename=='source.zip';download.save_as(str(out/'downloaded-source.zip'))
-    assert (out/'downloaded-source.zip').read_bytes()==Path('dist/submission-site-v6/source.zip').read_bytes()
+    assert (out/'downloaded-source.zip').read_bytes()==(Path(args.site)/'source.zip').read_bytes()
     assert not errors,errors
     write_json(out/'browser-checks.json',{'passed':True,'views':checks,'flow_tabs_and_keyboard':True,'autoplay_and_pause':True,'five_screenshot_dialogs':True,'passcode_copy':True,'faq':True,'source_search':True,'source_text_matches':True,'source_download_matches':True,'demo_sends_no_posts':True,'page_errors':errors})
     print(json.dumps({'passed':True,'views':len(checks),'page_errors':errors}))
