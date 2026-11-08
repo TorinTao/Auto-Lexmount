@@ -2,11 +2,14 @@
 import argparse
 import json
 import sys
+import tempfile
+import shutil
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from playwright.sync_api import sync_playwright
 from autolex.common import read_json,write_json
 from autolex.design import THEMES
+from autolex.presentation import render_report
 
 
 def main():
@@ -15,11 +18,20 @@ def main():
     output=read_json(root/'output.json');rows=[];errors=[]
     with sync_playwright() as pw:
         browser=pw.chromium.launch();page=browser.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
+        actual_theme=read_json(root/'design.json')['theme']
         for theme in THEMES:
+            if theme==actual_theme:
+                document=(root/'release/index.html').read_text()
+            else:
+                with tempfile.TemporaryDirectory() as temp:
+                    temp=Path(temp)
+                    for name in ('spec.json','output.json','tests.json','quality.json','main.py','design.json'):
+                        if (root/name).exists():shutil.copyfile(root/name,temp/name)
+                    design=read_json(temp/'design.json');design['theme']=theme;write_json(temp/'design.json',design)
+                    document=render_report(temp,['main.py','design.json'])
             for width in (1440,820,390,320):
                 page.set_viewport_size({'width':width,'height':1050 if width>820 else 844})
-                page.set_content((root/'release/index.html').read_text())
-                page.locator('body').evaluate('(e,theme)=>e.className=theme',theme)
+                page.set_content(document)
                 page.add_style_tag(content='html{scroll-behavior:auto}')
                 assert not page.evaluate('document.documentElement.scrollWidth>innerWidth'),(theme,width)
                 links=page.locator('a[href^="#"]')

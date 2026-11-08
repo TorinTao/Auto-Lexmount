@@ -53,6 +53,19 @@ class DesignTests(unittest.TestCase):
             self.assertNotIn('<img',document)
             self.assertLess(document.index('第二点'),document.index('第一点'))
 
+    def test_classic_keeps_evidence_and_moves_map_after_conclusions(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=self.root(d)
+            write_json(root/'design.json',{**PLAN,'theme':'classic','input_sha256':fingerprint(read_json(root/'spec.json'),OUTPUT)})
+            document=render_report(root,['main.py','design.json'])
+            self.assertIn('body class="classic"',document)
+            self.assertLess(document.index('id="findings"'),document.index('<aside class="atlas"'))
+            self.assertEqual(document.count('id="point-1"'),1)
+            self.assertEqual(document.count('id="point-2"'),1)
+            for text in ['Original first','Original second','Verified conclusion']:
+                self.assertIn(text,document)
+            self.assertNotIn('READING MAP',document)
+
     def test_invalid_design_blocks_package(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);w=Workflow(root,'https://example.com',demo=True);w.run('test');w.demo=False

@@ -3,19 +3,21 @@ import hashlib
 import json
 from .common import WorkflowError, read_json, write_json
 
-THEMES = ('blueprint', 'editorial', 'fieldnotes')
+THEMES = ('classic', 'blueprint', 'editorial', 'fieldnotes')
 TASK = '''DESIGN: You are the editorial designer of a small Chinese reference website.
 Create a distinctive, beginner-friendly presentation plan from the supplied verified output.
-This is a reader's guide, not an engineering execution report. Start with a concrete question.
-Return JSON only: {"theme":"blueprint"|"editorial"|"fieldnotes", "kicker":str,
+This is a reader's guide. Prefer a compact, descriptive Chinese title, not a large advertising slogan.
+Return JSON only: {"theme":"classic"|"blueprint"|"editorial"|"fieldnotes", "kicker":str,
 "headline":str, "intro":str, "reason":str,
 "chapters":[{"point_id":existing point ID,"label":str}]}.
+classic = the established pale-lavender report: single-column heading, soft statistics tiles, white rounded content cards, compact topic links;
 blueprint = cobalt technical atlas, giant sans-serif question, numbered index and dark diagram panel;
 editorial = warm paper and vermilion, serif editorial headline, wide numbered reading rows;
 fieldnotes = forest green field guide, notebook rules, compact checklist and annotated tabs.
-Choose based on the subject, not randomly. Each must have a recognizable visual concept.
+Use classic by default. The user prefers improving the original quiet card report over the large blue atlas.
+Only choose another theme when feedback explicitly requests it. Preserve the established layout when refining a work.
 Write Chinese: kicker <=18 chars, headline <=28 chars, intro <=90 chars, reason <=180 chars,
-chapter label <=16 chars. Headline should be an inviting question instead of copying the technical title.
+chapter label <=16 chars. Prefer a clear descriptive headline of 12-22 Chinese characters. Avoid jargon-heavy prefixes like 决策清单式 or exaggerated rhetorical questions.
 Intro describes what readers can look up, not new factual advice or claims. Labels are short topic names.
 Include EVERY supplied point ID exactly once, in a deliberate beginner-friendly reading order.
 Never change quotes, factual summaries, conclusions or URLs. No HTML, CSS, scripts, new data,
@@ -70,6 +72,6 @@ def generate_design(root, model, *, feedback=''):
 
 def fallback_design(spec, output):
     # Offline fixtures/legacy direct rendering remain deterministic and make no AI claim.
-    return {'theme':'editorial','kicker':'一份可以查证的小指南','headline':spec['selected']['title'],
+    return {'theme':'classic','kicker':'一份可以查证的小指南','headline':spec['selected']['title'],
             'intro':'先看看关键区别，再顺着原文找到依据。','reason':'Deterministic fallback',
             'chapters':[{'point_id':p['id'],'label':'阅读要点 '+str(n+1)} for n,p in enumerate(p for i in output['items'] for p in i.get('points',[]))]}

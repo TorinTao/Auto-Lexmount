@@ -78,7 +78,8 @@ def prepare_release(root, profile):
     about='<section><h2>这件作品如何完成</h2><p>'+html.escape(fields['cloudRole'])+'</p><p>'+html.escape(fields['taskResult'])+'</p><p><a href="materials.html">阅读本作品源码与运行证据 →</a></p><small>作品标识：'+html.escape(root.name)+' · 来源清单 SHA-256：'+source_hash+'</small></section>'
     index=(root/'index.html').read_text().replace('</main>',about+'</main>')
     from .presentation import report_style
-    materials='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(title)+' · 源码与证据</title><style>'+report_style()+'details{border-top:1px solid var(--line);padding:20px 0}h1{font-size:clamp(28px,5vw,48px)}</style><main><a href="index.html">← 返回本作品</a><h1>'+html.escape(title)+' · 源码与证据</h1><p>这些文件只属于当前作品，不包含 Agent 仓库、作者联系方式或凭据。</p>'+''.join(sections)+'</main></html>'
+    report_theme=html.escape(read_json(root/'design.json')['theme'],quote=True) if (root/'design.json').exists() else 'classic'
+    materials='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(title)+' · 源码与证据</title><style>'+report_style()+'details{border-top:1px solid var(--line);padding:20px 0}h1{font-size:clamp(28px,5vw,48px)}</style><body class="'+report_theme+'"><main><a href="index.html">← 返回本作品</a><h1>'+html.escape(title)+' · 源码与证据</h1><p>这些文件只属于当前作品，不包含 Agent 仓库、作者联系方式或凭据。</p>'+''.join(sections)+'</main></body></html>'
     if state.get('visual_enabled'):
         from .visual import capture
         layout=capture(index,dest/'layout-check')
