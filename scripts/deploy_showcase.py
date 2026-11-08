@@ -1,6 +1,6 @@
 """Update only the existing Yours showcase; preserve sharing and contest form copy."""
 import argparse
-import time
+import uuid
 import fcntl
 import hashlib
 import io
@@ -12,7 +12,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from playwright.sync_api import expect
 from autolex.common import read_json,write_json,WorkflowError,now
 from autolex.release_browser import ReleaseBrowser,YOURS_URL
-from scripts.resubmit_existing import matching_archive,open_entry
+from scripts.resubmit_existing import matching_archive
 from scripts.update_self_entry import Sources
 
 parser=argparse.ArgumentParser()
@@ -25,37 +25,47 @@ build=read_json(proof/'build.json');archive=root/build['archive'];data=archive.r
 if hashlib.sha256(data).hexdigest()!=build['sha256']:raise WorkflowError('Build archive changed')
 identity=read_json(root/'runs/self-entry-current.json')
 if identity['url']!='https://yours.lexmount.cn/artifact-site/s/ct83Wy9aja_U' or build['target_url']!=identity['url']:raise WorkflowError('Wrong Auto Lexmount target')
-form_copy=read_json(root/identity['copy'])
 with (root/'runs/.release.lock').open('a') as lock:
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     with ReleaseBrowser(read_json(root/'.release-profile.json')) as b:
         b.page.goto(identity['url'],wait_until='domcontentloaded');b.page.locator('iframe.fs-frame').wait_for(timeout=30000)
         write_json(proof/'prepublish-page.json',{'url':b.page.url,'buttons':b.page.get_by_role('button').all_text_contents()})
+        for item in (build.get('screenshots') or {}).get('works',{}).values():
+            slug=item['url'].rsplit('/',1)[-1]
+            live=b.context.request.get(YOURS_URL+'/api/sites/'+slug).json()
+            if live['version']['id']!=item['version_id']:raise WorkflowError('A featured work changed after its screenshot; refresh it first')
         old=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U').json();version=old['version']['id']
         before=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U/export',timeout=30000)
         if before.status!=200:raise WorkflowError('Cannot back up previous version')
         (proof/'before.zip').write_bytes(before.body())
         write_json(proof/'before.json',{'version_id':version,'url':identity['url']})
-        record={'status':'updating','url':identity['url'],'prior_version':version,'archive_sha256':build['sha256'],'at':now(),'method':'native-upload-dialog','scope':'Auto Lexmount self showcase; existing form fields preserved'}
+        record={'status':'updating','url':identity['url'],'prior_version':version,'archive_sha256':build['sha256'],'at':now(),'method':'native-tree-upload','scope':'Auto Lexmount self showcase; existing form fields preserved'}
         write_json(journal,record)
         try:
-            # Use the site's native upload dialog, which preserves its sharing settings.
-            b.page.get_by_role('button',name='More',exact=True).click()
-            b.page.get_by_role('menuitem',name='Upload new version',exact=True).click()
-            b.page.locator('input[type=file]:not([webkitdirectory])').set_input_files(
-                {'name':'Auto-Lexmount-介绍页.zip','mimeType':'application/zip','buffer':data})
-            official=b.page.get_by_role('checkbox',name='Set as official version after uploading')
-            if official.count():expect(official).not_to_be_checked()
-            b.page.get_by_role('button',name='Publish new version',exact=True).click()
-            deadline=time.monotonic()+90
-            while time.monotonic()<deadline:
-                current=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U').json()
-                if current['version']['id']!=version:break
-                b.page.wait_for_timeout(1500)
-            else:raise WorkflowError('Publication outcome uncertain; inspect before retrying')
+            # Upload a website tree without package metadata. ZIP/package uploads
+            # generate a file-directory entry, adding an unnecessary index click.
+            key='autolex-showcase-'+str(uuid.uuid4())
+            record['idempotency_key']=key;write_json(journal,record)
+            headers={'Origin':'https://yours.lexmount.cn','idempotency-key':key+'-start'}
+            started=b.context.request.post(YOURS_URL+'/api/uploads',headers=headers,data={'slug':'ct83Wy9aja_U'})
+            if started.status!=201:raise WorkflowError('Could not stage website tree: '+str(started.status))
+            upload_id=started.json()['versionId'];record['upload_id']=upload_id;write_json(journal,record)
+            with zipfile.ZipFile(io.BytesIO(data)) as content:
+                for name in content.namelist():
+                    if name.endswith('/'):continue
+                    response=b.context.request.put(YOURS_URL+'/api/uploads/'+upload_id+'/files/'+name,
+                        headers={'Origin':'https://yours.lexmount.cn','content-type':'application/octet-stream'},data=content.read(name))
+                    if response.status not in (200,201,204):raise WorkflowError('Failed to stage '+name)
+            record['status']='committing';write_json(journal,record)
+            response=b.context.request.post(YOURS_URL+'/api/uploads/'+upload_id+'/commit?expected_version='+version,
+                headers={'Origin':'https://yours.lexmount.cn','idempotency-key':key},data={'official':False},timeout=60000)
+            if response.status!=201:raise WorkflowError('Website commit returned '+str(response.status))
+            current=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U').json()
+            if current['version']['id']!=response.json()['versionId']:raise WorkflowError('Published version changed')
+            if current['version']['entry']!='index.html':raise WorkflowError('Website must open its homepage directly')
             record.update(status='published',version_id=current['version']['id']);write_json(journal,record)
         except Exception:
-            if record['status']=='updating':record['status']='unknown';write_json(journal,record)
+            if record['status'] in ('updating','committing'):record['status']='unknown';write_json(journal,record)
             raise
         exported=b.context.request.get(YOURS_URL+'/api/sites/ct83Wy9aja_U/export',timeout=30000)
         if exported.status!=200:raise WorkflowError('Cannot verify hosted archive')
@@ -73,8 +83,7 @@ with (root/'runs/.release.lock').open('a') as lock:
             page=guest.new_page();page.set_default_timeout(30000);page.goto(identity['url'],wait_until='domcontentloaded')
             page.locator('#main-passcode').fill('NH8EPP');page.get_by_role('button',name='Open work',exact=True).click()
             frame=page.frame_locator('iframe.fs-frame')
-            try:expect(frame.locator('h1')).to_have_text('你动动手指，它跑完流程。',timeout=4000)
-            except Exception:frame.get_by_text('index.html',exact=True).click()
+            # A fresh guest must see the homepage without opening a directory item.
             expect(frame.locator('h1')).to_have_text('你动动手指，它跑完流程。')
             expect(frame.locator('.hero-body')).to_contain_text('Auto Lexmount')
             expect(frame.locator('.experiment')).to_contain_text('后续测试提交会按约定加上标记')
@@ -82,10 +91,15 @@ with (root/'runs/.release.lock').open('a') as lock:
             frame.locator('#step-4').click();expect(frame.locator('#step-title')).to_have_text('做出来，也得让人看得懂。')
             frame.locator('#step-5').click();expect(frame.locator('#step-title')).to_have_text('材料准备好，获得授权后交作业。')
             frame.locator('#step-0').click()
-            frame.locator('[data-preview]').first.click();expect(frame.locator('#preview-dialog')).to_be_visible();frame.locator('#close-preview').click()
+            for button in frame.locator('[data-preview]').all():
+                button.click();expect(frame.locator('#preview-dialog')).to_be_visible()
+                assert frame.locator('#preview-image').evaluate('(e)=>e.complete&&e.naturalWidth===1440&&e.naturalHeight===1050')
+                frame.locator('#close-preview').click()
+            frame.locator('#works-title').evaluate('(e)=>e.scrollIntoView({behavior:"instant"})')
+            page.screenshot(path=str(proof/'hosted-work-gallery.png'))
             for label,width,height in [('desktop',1440,1050),('mobile',390,844),('narrow',320,760)]:
                 page.set_viewport_size({'width':width,'height':height})
-                frame.locator('body').evaluate('()=>window.scrollTo(0,0)')
+                frame.locator('body').evaluate('()=>window.scrollTo({top:0,behavior:"instant"})')
                 assert not frame.locator('html').evaluate('(e)=>e.scrollWidth>innerWidth'),label
                 page.screenshot(path=str(proof/('hosted-'+label+'.png')))
             page.set_viewport_size({'width':1440,'height':1050})
@@ -98,9 +112,9 @@ with (root/'runs/.release.lock').open('a') as lock:
             record.update(guest_verified=True,hosted_interactions_verified=True,archive_verified=True)
             write_json(journal,record)
         finally:guest.close()
-        # The newly written, entertainment-facing contest copy must still be intact.
-        open_entry(b,identity)
-        for field,value in form_copy.items():expect(b.page.locator('#'+field)).to_have_value(value)
-        record.update(status='verified',verified_at=now(),contest_copy_unchanged=True,source_files_verified=len(checked))
+        record.update(status='verified',verified_at=now(),direct_home=True,contest_form_written=False,source_files_verified=len(checked))
         write_json(journal,record)
-        print(json.dumps({'status':'verified','url':identity['url'],'version_id':record['version_id'],'guest_verified':True,'contest_copy_unchanged':True,'source_files_verified':len(checked)}),flush=True)
+        identity.update(showcase_version=record['version_id'],showcase_proof=str(journal.relative_to(root)),
+            showcase_archive=build['archive'],showcase_verified_at=record['verified_at'],showcase_entry='index.html')
+        write_json(root/'runs/self-entry-current.json',identity)
+        print(json.dumps({'status':'verified','url':identity['url'],'version_id':record['version_id'],'guest_verified':True,'direct_home':True,'source_files_verified':len(checked)}),flush=True)

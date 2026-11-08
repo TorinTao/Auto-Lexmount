@@ -14,6 +14,7 @@ from autolex.config import load_environment
 parser=argparse.ArgumentParser()
 parser.add_argument('--out',default='dist/submission-site-v7')
 parser.add_argument('--proof',default='runs/autolex-public-refresh')
+parser.add_argument('--screenshots',default='runs/showcase-screenshots-current.json')
 args=parser.parse_args()
 root=Path.cwd();site=(root/args.out).resolve();site.mkdir(parents=True,exist_ok=True)
 proof=(root/args.proof).resolve();proof.mkdir(parents=True,exist_ok=True)
@@ -22,6 +23,8 @@ assert identity['url']=='https://yours.lexmount.cn/artifact-site/s/ct83Wy9aja_U'
 records=read_json(root/'runs/resubmission-lab/prepared.json')
 current=read_json(root/'runs/presentation-current.json')
 records=[{**r,'revision':current.get(r['run'],{}).get('run',r['revision'])} for r in records]
+screenshot_manifest=root/args.screenshots
+screenshots=read_json(screenshot_manifest) if screenshot_manifest.exists() else None
 latest_checks=read_json(root/'runs/plain-language-lab/verification.json')
 assert latest_checks['local_passed']
 
@@ -37,7 +40,13 @@ ordered=sorted(records,key=lambda r:r['run']!='polish-csv');cards=[]
 for index,r in enumerate(ordered):
     run=root/'runs'/r['revision'];visual=read_json(run/'visual-review.json');assert visual['passed']
     screenshot=next(run/path for path in visual['last']['images'] if path.endswith('desktop-top.png'))
-    filename=r['run']+'.png';shutil.copyfile(screenshot,site/filename)
+    if screenshots:
+        captured=screenshots['works'][r['run']]
+        assert captured['url']==r['url'], 'Screenshot belongs to another work'
+        screenshot=root/captured['image']
+        assert hashlib.sha256(screenshot.read_bytes()).hexdigest()==captured['sha256'], 'Screenshot changed after capture'
+    image_hash=hashlib.sha256(screenshot.read_bytes()).hexdigest()
+    filename=r['run']+'-'+image_hash[:12]+'.png';shutil.copyfile(screenshot,site/filename)
     title,description=labels[r['run']]
     cards.append('<article class="work-card'+(' featured' if index==0 else '')+'"><button class="work-image" type="button" data-preview="'+filename+'" data-title="'+esc(title)+'" aria-label="查看'+esc(title)+'的实际截图"><img src="'+filename+'" alt="'+esc(title)+'的实际作品页面" width="1440" height="1050" loading="lazy"><span class="image-hint">查看实际截图 ↗</span></button><div class="work-body"><span class="work-badge">测试作品 '+str(index+1).zfill(2)+' / 流程测试作品</span><h3>'+esc(title)+'</h3><p>'+esc(description)+'</p><div class="work-bottom"><a href="'+esc(r['url'])+'" target="_blank" rel="noopener noreferrer">打开测试作品 ↗</a><button class="copy-code" type="button" data-copy="'+esc(r['passcode'])+'" aria-label="复制'+esc(title)+'的访问码">复制访问码 <strong>'+esc(r['passcode'])+'</strong></button></div></div></article>')
 steps=['读规则','想点子','写代码','跑测试','看界面','交作品']
@@ -55,6 +64,7 @@ for r in records:
     run=root/'runs'/r['revision']
     evidence += [run/name for name in ['main.py','input.json','output.json','tests.json','quality.json','review.json','visual-review.json','visual-history.json','visual-theme.json','reader.json','reader-review.json'] if (run/name).exists()]
 evidence.append(root/'runs/plain-language-lab/verification.json')
+if screenshots:evidence.append(screenshot_manifest)
 files=source+evidence
 sections=''.join('<details class="source-file" data-filename="'+esc(str(p.relative_to(root)))+'"><summary>'+esc(str(p.relative_to(root)))+'</summary><pre>'+esc(p.read_text())+'</pre></details>' for p in files)
 receipts=''.join('<li><strong>'+esc(labels[r['run']][0])+'</strong><span>测试收件编号：'+esc(r['receipt'])+'</span><span>访问码：'+esc(r['passcode'])+' · 已做访客访问与源码核验</span><a href="'+esc(r['url'])+'" target="_blank" rel="noopener noreferrer">打开测试材料 ↗</a></li>' for r in ordered)
@@ -75,5 +85,5 @@ with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
     for p in sorted(site.rglob('*')):
         if p.is_file():z.write(p,p.relative_to(site))
 with zipfile.ZipFile(archive) as z:assert z.testzip() is None
-write_json(proof/'build.json',{'target_url':identity['url'],'archive':str(archive.relative_to(root)),'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'bytes':archive.stat().st_size,'files':[str(p.relative_to(root)) for p in files],'source_files':len(source),'source_and_evidence_files':len(files),'private_scan':'passed','title':identity['title'],'copy_source':identity['copy']})
+write_json(proof/'build.json',{'target_url':identity['url'],'screenshots':screenshots,'archive':str(archive.relative_to(root)),'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'bytes':archive.stat().st_size,'files':[str(p.relative_to(root)) for p in files],'source_files':len(source),'source_and_evidence_files':len(files),'private_scan':'passed','title':identity['title'],'copy_source':identity['copy']})
 print(json.dumps({'archive':str(archive),'bytes':archive.stat().st_size,'source_files':len(source),'source_and_evidence_files':len(files)}))
