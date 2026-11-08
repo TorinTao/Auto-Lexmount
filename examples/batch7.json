@@ -1,0 +1,125 @@
+[
+  {
+    "id": "collections",
+    "brief": "为 Python 初学者制作 Counter 与 defaultdict 场景速查。仅使用 https://docs.python.org/3/library/collections.html#collections.Counter 和 https://docs.python.org/3/library/collections.html#collections.defaultdict 。4条带短英文原文引用的中文要点、2条基于要点的结论；说明缺失键行为和 default_factory 的调用条件。不要额外规定字数。",
+    "points": [
+      4,
+      4
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "Counter 缺失键返回零",
+      "defaultdict 的工厂函数何时触发",
+      "get 与下标访问的差异"
+    ]
+  },
+  {
+    "id": "timezone",
+    "brief": "制作 Python 时区和夏令时迁移说明。仅使用 https://docs.python.org/3/library/datetime.html 与 https://docs.python.org/3/library/zoneinfo.html 。6条带短英文原文引用的中文要点、2条结论；覆盖 naive/aware 区别、ZoneInfo 数据来源、fold 对重复本地时间的处理，不编造不存在或重复时间会被自动拒绝的保证。",
+    "points": [
+      6,
+      6
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "naive 与 aware",
+      "IANA 时区数据来源",
+      "fold 与重复本地时间",
+      "没有自动校验不存在时间的臆造保证"
+    ]
+  },
+  {
+    "id": "http-cache",
+    "brief": "为网站开发者制作 HTTP 缓存控制避坑卡。仅使用 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control 和 https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching 。4至6条带英文原文短引用的中文要点，2条结论；准确区分 no-cache、no-store、private 和 public，不把重新验证等同于禁止存储。",
+    "points": [
+      4,
+      6
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "no-cache 重新验证",
+      "no-store 不存储",
+      "private 与共享缓存",
+      "public 的适用范围"
+    ]
+  },
+  {
+    "id": "css-layout",
+    "brief": "制作 CSS Grid 与 Flexbox 的布局选择卡。仅使用 https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Relationship_of_grid_layout_with_other_layout_methods 与 https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_flexible_box_layout/Basic_concepts_of_flexbox 。4条带原文短引用的中文要点、2条结论，覆盖一维和二维布局、换行后的行如何分配空间；不要声称某一种布局总是更快。",
+    "points": [
+      4,
+      4
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "一维与二维布局",
+      "flex 换行后的独立分配",
+      "不编造性能优劣"
+    ]
+  },
+  {
+    "id": "promises",
+    "brief": "制作 Promise.all 与 Promise.allSettled 并发结果处理对照。仅使用 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all 与 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled 。4条带英文原文短引用的中文要点、2条结论；覆盖拒绝行为、返回结果结构、结果顺序，不声称拒绝会自动取消其他任务。",
+    "points": [
+      4,
+      4
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "all 首次拒绝",
+      "allSettled 每个结果状态",
+      "结果按输入顺序",
+      "不声称自动取消"
+    ]
+  },
+  {
+    "id": "sqlite-integrity",
+    "brief": "制作 SQLite 外键与事务检查卡。仅使用 https://www.sqlite.org/foreignkeys.html 和 https://www.sqlite.org/lang_transaction.html 。6条带英文原文短引用的中文要点、3条基于要点的结论；覆盖连接级外键启用、立即与延迟约束、事务和嵌套限制。只讲解文档，不执行数据库修改，不额外要求截图或字数。",
+    "points": [
+      6,
+      6
+    ],
+    "conclusions": [
+      3,
+      3
+    ],
+    "facets": [
+      "每连接启用外键",
+      "立即与延迟外键约束",
+      "BEGIN 不嵌套及 SAVEPOINT"
+    ]
+  },
+  {
+    "id": "git-worktree",
+    "brief": "制作 Git stash 与 clean 的工作区整理避坑卡。仅使用 https://git-scm.com/docs/git-stash 和 https://git-scm.com/docs/git-clean 。6条带英文原文短引用的中文要点、2条结论；区分已跟踪、未跟踪和忽略文件，说明 dry-run 与恢复边界。只解释，不执行任何 Git 或删除命令。",
+    "points": [
+      6,
+      6
+    ],
+    "conclusions": [
+      2,
+      2
+    ],
+    "facets": [
+      "stash 默认范围",
+      "未跟踪与忽略文件",
+      "clean dry-run",
+      "删除与可恢复边界"
+    ]
+  }
+]

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Auto Lexmount 工作流控制台，从一个想法到一份可核验的作品。">
+  <title>Auto Lexmount · 工作台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Auto Lexmount 首页"><span class="brand-icon">a<span>↗</span></span><span>AUTO<span class="brand-light">LEXMOUNT</span></span></a>
+    <div class="workspace-label">YOUR LITTLE EXPERIMENT</div>
+    <nav aria-label="主导航">
+      <button class="nav-item active" data-nav="overview"><span class="nav-icon">▦</span>工作台<span class="nav-arrow">↗</span></button>
+      <button class="nav-item" data-nav="history"><span class="nav-icon">◷</span>运行记录<span id="run-count" class="nav-count">0</span></button>
+      <button class="nav-item" data-nav="environment"><span class="nav-icon">⚙</span>环境配置</button>
+    </nav>
+    <div class="sidebar-note"><span class="note-spark">✳</span><p>让 Agent 忙起来，<br>让想法跑起来。</p><span>一点自动化，一点好奇心。</span></div>
+    <div class="sidebar-bottom"><span class="avatar">A</span><div>本地工作空间<small>Auto Lexmount / v0.1</small></div><span class="local-dot"></span></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar"><div><span class="muted">工作空间</span><span class="slash">/</span><span id="breadcrumb">工作台</span></div><div class="topbar-right"><span class="experimental">LAB PROJECT</span><span id="connection" class="connection"><i></i>连接中</span></div></header>
+    <div class="page">
+      <section class="page-heading"><div><div class="eyebrow">FROM IDEA TO SOMETHING REAL</div><h1>把想法，交给流水线<span>。</span></h1><p>读懂规则，生成代码，跑完测试。剩下的，交给一点好奇心。</p></div><button id="new-task" class="button primary"><span>＋</span> 新建任务</button></section>
+
+      <div id="offline-banner" class="notice danger" hidden>无法连接本地服务。请先运行 <code>python -m autolex serve</code>，再刷新页面。</div>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+      <section class="stats" aria-label="工作流概况">
+        <div class="stat-card"><span class="stat-icon lavender">↗</span><div><span class="stat-label">累计任务</span><strong id="stat-total">—</strong></div><span class="stat-caption">每一次尝试都算数</span></div>
+        <div class="stat-card"><span class="stat-icon mint">✓</span><div><span class="stat-label">已完成</span><strong id="stat-ready">—</strong></div><span class="stat-caption">材料已准备就绪</span></div>
+        <div class="stat-card"><span class="stat-icon peach">⌁</span><div><span class="stat-label">运行中</span><strong id="stat-active">—</strong></div><span class="stat-caption">Agent 正在工作</span></div>
+      </section>
+
+      <section id="environment-section" class="panel environment" hidden>
+        <div class="panel-header"><div><h2>运行环境</h2><p>凭证保留在服务端，网页只显示配置状态。</p></div><button class="button subtle" id="refresh-health">重新检查 ↻</button></div>
+        <div id="environment-checks" class="environment-checks"></div>
+        <div class="environment-help"><p>在启动服务的终端配置变量，然后重启控制台：</p><pre>export LEXMOUNT_API_KEY='…'
+export LEXMOUNT_PROJECT_ID='…'
+export MODEL_API_KEY='…'
+export MODEL_NAME='…'
+export MODEL_BASE_URL='https://你的模型服务/v1'
+docker pull python:3.12-slim
+python -m autolex serve</pre><p>也支持 <code>LEXMOUNT_FETCH_CLI</code>。配置检查不代表 API、网络或 Docker daemon 已连通。</p></div>
+      </section>
+
+      <div id="workspace" class="workspace">
+        <div class="main-column">
+          <section class="panel workflow-panel">
+            <div class="panel-header"><div><div class="section-kicker">WORKFLOW</div><h2>任务流水线 <span id="mode-badge" class="badge neutral">等待任务</span></h2></div><button id="resume-task" class="button subtle" hidden>继续运行 ↗</button></div>
+            <div class="run-info"><div><h3 id="run-title">下一个想法，从这里开始</h3><p id="run-url">创建一个任务，或者先试试离线演示。</p></div><span id="run-status" class="badge neutral">未开始</span></div>
+            <div id="run-overview" class="run-overview" aria-live="polite" hidden></div>
+            <div class="run-actions"><a id="open-preview" class="button primary" target="_blank" rel="noopener noreferrer" hidden>打开作品预览 ↗</a><button id="revise-task" class="button subtle" hidden>按反馈改一版</button><button id="release-task" class="button subtle" hidden>发布并提交这件作品</button></div>
+            <p id="release-summary" class="submission-note" hidden></p>
+            <div id="pipeline" class="pipeline" aria-label="工作流阶段"></div>
+            <div class="pipeline-footer"><span><span class="tiny-dot"></span><span id="run-caption">五个阶段，一份完整的成果。</span></span><span id="run-time">—</span></div>
+            <div id="run-error" class="inline-error" hidden></div>
+          </section>
+
+          <section class="panel results-panel">
+            <div class="panel-header"><div><div class="section-kicker">THE OUTPUT</div><h2>看看 Agent 做了什么</h2></div><button class="icon-button" id="refresh-run" aria-label="刷新任务结果" title="刷新">↻</button></div>
+            <div class="tabs" role="tablist" aria-label="任务结果">
+              <button id="tab-result" role="tab" aria-controls="result-content" aria-selected="true" data-tab="result">成果预览</button>
+              <button id="tab-ideas" role="tab" aria-controls="result-content" aria-selected="false" data-tab="ideas" tabindex="-1">选题灵感</button>
+              <button id="tab-code" role="tab" aria-controls="result-content" aria-selected="false" data-tab="code" tabindex="-1">生成代码</button>
+              <button id="tab-tests" role="tab" aria-controls="result-content" aria-selected="false" data-tab="tests" tabindex="-1">测试记录</button>
+              <button id="tab-materials" role="tab" aria-controls="result-content" aria-selected="false" data-tab="materials" tabindex="-1">投稿材料</button>
+            </div>
+            <div id="result-content" class="result-content" role="tabpanel" aria-labelledby="tab-result" tabindex="0"></div>
+          </section>
+        </div>
+
+        <aside class="right-column">
+          <section class="panel quick-start"><div class="quick-title"><span class="small-mark">↗</span><span class="section-kicker">A SMALL START</span></div><h2>先跑一次，<br>再想大一点。</h2><p>无需 API 密钥，用固定样例走完选题、代码、测试与打包。</p><button id="quick-demo" class="button dark">运行离线演示 <span>↗</span></button><small><span class="tiny-dot"></span>演示结果不作为真实参赛证据</small></section>
+          <section class="panel health-panel"><div class="small-panel-heading"><h2>连接与环境</h2><button id="show-environment" class="text-button">查看 ↗</button></div><div id="health-list"></div><p class="small-footnote">状态仅代表本地配置情况</p></section>
+          <section class="panel activity-panel"><div class="small-panel-heading"><h2>本次运行</h2><span class="muted">◷</span></div><div id="activity-list" class="activity-list"><p class="muted">运行后，这里会留下过程。</p></div></section>
+        </aside>
+      </div>
+
+      <section class="panel history-panel" id="history-section"><div class="panel-header"><div><div class="section-kicker">THE PAPER TRAIL</div><h2>每一次尝试，都有记录</h2></div><button id="refresh-history" class="text-button">刷新记录 ↻</button></div><div class="table-scroll"><table><thead><tr><th>任务 / 来源</th><th>模式</th><th>进度</th><th>状态</th><th>创建时间</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="history-body"></tbody></table></div></section>
+      <footer class="page-footer"><span><b>Auto Lexmount</b> · 为好奇心留一点空间</span><span>Built for small experiments. ✳</span></footer>
+    </div>
+  </main>
+
+  <dialog id="task-dialog" aria-labelledby="dialog-title">
+    <form id="task-form"><div class="dialog-header"><div><div class="section-kicker">START SOMETHING</div><h2 id="dialog-title">一个链接，一次新尝试。</h2></div><button type="button" id="close-dialog" class="icon-button" aria-label="关闭">×</button></div>
+      <label for="task-url">活动官网</label><input id="task-url" name="url" type="url" required value="https://browser.lexmount.cn/events/real-task-challenge" placeholder="https://…">
+      <label for="task-brief">想做什么（可选）</label><textarea id="task-brief" name="brief" rows="3" maxlength="6000" placeholder="例如：比较两个官方文档，整理 5 条有原文依据的中文要点。"></textarea>
+      <input id="revision-of" name="revision_of" type="hidden" value="">
+      <div id="revision-fields" hidden><label for="task-feedback">这次具体改什么</label><textarea id="task-feedback" name="feedback" rows="4" maxlength="6000" placeholder="指出当前作品的问题和期待的结果。原作品和失败历史会保留。"></textarea><p class="form-help">沿用当前选题、来源和代码，在新任务中修改并重新验证。</p></div>
+      <fieldset class="mode-options"><legend>运行模式</legend><label><input type="radio" name="mode" value="demo" checked><span><b>离线演示</b><small>固定样例 · 不消耗 API</small></span><span class="mode-symbol">◌</span></label><label><input type="radio" name="mode" value="live"><span><b>真实运行</b><small>调用 Lexmount 与模型 API</small></span><span class="mode-symbol">↗</span></label></fieldset>
+      <p id="mode-help" class="form-help">演示不会访问填写的网址，结果将标注为 DEMO。</p>
+      <div class="form-row"><div><label for="task-until">运行至</label><select id="task-until" name="until"><option value="package">完整流程 · 材料打包</option><option value="rules">读取规则</option><option value="ideas">生成选题</option><option value="build">生成代码</option><option value="test">测试通过</option></select></div><div><label for="task-repairs">最多修复次数</label><select id="task-repairs" name="repairs"><option value="3">3 次</option><option value="2">2 次</option><option value="1">1 次</option><option value="0">不自动修复</option></select></div></div>
+      <p class="form-help">第一版支持公开网页资料整理任务；真实运行可能产生 API 费用。</p><div id="form-error" class="inline-error" role="alert" hidden></div>
+      <label class="release-option"><input id="auto-release" type="checkbox" name="auto_release"> 通过测试后，自动发布并提交这件新作品</label><p class="form-help">仅适用于真实完整流程，使用服务端已配置的作者和登录账号。同一作品的改版不会重复投稿。</p>
+      <div class="dialog-footer"><span>小任务，也可以有完整的过程。</span><button id="submit-task" type="submit" class="button primary">启动流水线 ↗</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

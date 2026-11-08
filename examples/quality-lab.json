@@ -1,0 +1,14 @@
+[
+  {
+    "id": "data-formats",
+    "brief": "为处理小型数据文件的初学者制作 CSV 与 JSON 选择指南。仅使用 https://docs.python.org/3/library/csv.html 和 https://docs.python.org/3/library/json.html 。用中文解释场景、读取方式和常见限制，4至6条带原文引用的要点和2条有依据的结论，缺失信息明确标记。"
+  },
+  {
+    "id": "git-recovery",
+    "brief": "为 Git 新用户制作未提交改动恢复与撤销操作的文档对照卡。仅使用 https://git-scm.com/docs/git-restore 和 https://git-scm.com/docs/git-reset 。区分工作区、暂存区与提交历史，明确可能丢失改动的操作，但不要实际执行命令。中文描述，4至6条有原文引用的要点和2条结论。"
+  },
+  {
+    "id": "sqlite-backup",
+    "brief": "制作 SQLite 在线备份方案对照卡。仅使用 https://www.sqlite.org/backup.html 和 https://www.sqlite.org/lang_vacuum.html 。比较 Online Backup API 与 VACUUM INTO 的用途、限制和产物，给个人小工具开发者提供中文速查。4至6条有原文引用的要点和2条结论，不臆造源文未说明的性能数据。"
+  }
+]
