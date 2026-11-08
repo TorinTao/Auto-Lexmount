@@ -7,3 +7,5 @@
 .hero-body{max-width:35em}.hero-copy .eyebrow{letter-spacing:.8px;line-height:1.8}
 .hero{padding-top:58px;padding-bottom:72px}.paper-brief{font-size:24px}
 @media(max-width:700px){.hero{padding-top:32px;padding-bottom:42px}.hero-copy .eyebrow{font-size:11px;max-width:26em}.hero-body{line-height:1.85}.paper-brief{font-size:23px}.human-strip>div{grid-template-columns:25px 90px 1fr}.human-strip p{font-size:12px}.site-header nav{gap:12px}}
+
+.github-link{white-space:nowrap;font-weight:650}.source-actions{display:flex;gap:16px;align-items:center;flex-wrap:wrap}@media(max-width:700px){.site-header:has(nav){flex-wrap:wrap;padding-block:16px}.site-header nav{width:100%;justify-content:space-between;gap:10px}}
