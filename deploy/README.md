@@ -34,3 +34,17 @@ Then open <http://127.0.0.1:8766>. Keep the tunnel running. If that local port i
 Public access requires a separate authenticated HTTPS entry point and corresponding trusted-origin support. Do not expose this private dashboard by stripping its Host/Origin checks or forwarding it anonymously.
 
 Update by creating a new release directory and virtual environment, verifying it, switching `current`, and restarting `autolex`. Keep the old release for rollback. Persistent runs and credentials live outside releases. Do not restart the service during an active workflow; finish the run first or inspect its saved state before resuming.
+
+## Low-memory hosts
+
+On this 1.6 GiB host, existing services left roughly 120–220 MiB available. Importing images with `vm.swappiness=0` produced sustained memory pressure and temporary SSH stalls despite an existing 2 GiB swap file. Deployment set `vm.swappiness=60` in `/etc/sysctl.conf` to use that existing swap; the previous file is backed up at `/etc/auto-lexmount/sysctl.conf.before`. No existing application was stopped. The Auto Lexmount unit separately limits its memory and CPU usage.
+
+After deployment, verify the service and real workflow rather than relying only on `doctor`:
+
+```bash
+sudo systemctl is-active autolex
+sudo systemctl is-enabled autolex
+sudo -u autolex /opt/auto-lexmount/current/.venv/bin/python -m autolex --env-file /etc/auto-lexmount/env doctor
+```
+
+The deployed release is recorded by the `current` symlink. Inspect run state in `/var/lib/auto-lexmount/runs/`. Successful deployment tests must not automatically publish or submit test works.
